@@ -33,8 +33,9 @@ model Jogo {
   updatedAt      DateTime     @updatedAt()
   destaque       Boolean      @default(true)
   genero         Genero       @relation(fields: [generoId], references: [id])
-  generoId        Int
+  generoId       Int
   fotos          Foto[]
+  avaliacoes     Avaliacao[]
   @@map("jogos")
 }
 
@@ -48,13 +49,27 @@ model Foto {
 }
 
 model Usuario {
-  id                Int      @id @default(autoincrement())
+  id                String   @db.VarChar(36) @id @default(uuid())
   nome              String   @db.VarChar(60)
   email             String   @db.VarChar(40)
   senha             String   @db.VarChar(60)   // senha deve ser varchar(60)
   createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt  
+  updatedAt         DateTime @updatedAt
+  avaliacoes        Avaliacao[]  
   @@map("usuarios")
 }
 
+model Avaliacao {
+  id             Int          @id @default(autoincrement())
+  nota           Int          @db.SmallInt
+  comentario     String       @db.VarChar(500)
+  resposta       String?      @db.VarChar(500) @default("Nenhuma resposta")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt()
+  usuario        Usuario      @relation(fields: [usuarioId], references: [id])
+  usuarioId      String       @db.VarChar(36)
+  jogo           Jogo         @relation(fields: [jogoId], references: [id])
+  jogoId         Int
+  @@map("avaliacoes")
+}
 // npx migrate dev --name "Add Table Fotos"

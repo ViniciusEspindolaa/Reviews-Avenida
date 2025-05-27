@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Header } from "@/components/Header";
-import { Toaster } from 'sonner'
-import { Orbitron } from 'next/font/google'
+import Header from "@/components/Header";
+import { UsuarioProvider } from "@/context/UsuarioContext";
+import { Toaster } from "sonner";
+import { Orbitron } from "next/font/google";
 
 const orbitron = Orbitron({
-  subsets: ['latin'],
-  weight: ['500', '700'], // pode ajustar os pesos que vai usar
-})
+  subsets: ["latin"],
+  weight: ["500", "700"],
+});
 
 export const metadata: Metadata = {
   title: "Avenida Reviews",
@@ -21,11 +22,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-br">
-      <body className={`bg-black ${orbitron.className}`}>
-        <Header />
-        {children}
-        <Toaster richColors position="top-center" />
+    <html lang="pt-BR">
+      <body className={`bg-black text-white ${orbitron.className}`}>
+        <UsuarioProvider>
+          <Header />
+          <main>{children}</main>
+          <Toaster richColors position="top-center" />
+        </UsuarioProvider>
       </body>
     </html>
   );

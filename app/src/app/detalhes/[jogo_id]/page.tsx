@@ -1,66 +1,245 @@
-"use client"
+"use client";
 import { JogoItf } from "@/utils/types/JogoItf";
-import { useParams } from "next/navigation"
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useUsuarioStore } from "@/context/UsuarioContext";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import Link from "next/link";
+import { Suspense } from "react";
 
-export default function Detalhes() {
-  const params = useParams()
+type Inputs = {
+  comentario: string;
+  nota: number;
+};
 
-  const [jogo, setJogos] = useState<JogoItf>()
+type Avaliacao = {
+  id: string;
+  comentario: string;
+  nota: number;
+  usuarioId: string;
+  usuario: { nome: string };
+  createdAt: string;
+};
+
+function DetalhesContent() {
+  const params = useParams();
+  const [jogo, setJogo] = useState<JogoItf | null>(null);
+  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
+  const { usuario } = useUsuarioStore();
+  const { register, handleSubmit, reset } = useForm<Inputs>();
+  const jogoId = Array.isArray(params?.jogo_id) ? params.jogo_id[0] : params.jogo_id;
 
   useEffect(() => {
-    async function buscaDados() {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/jogos/${params.jogo_id}`)
-      const dados = await response.json()
-      // console.log(dados)
-      setJogos(dados)
+    async function loadData() {
+      if (!jogoId) {
+        toast.error("ID do jogo inválido");
+        return;
+      }
+
+      try {
+        // Buscar dados do jogo
+        const jogoResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/jogos/${jogoId}`);
+        if (!jogoResponse.ok) {
+          throw new Error("Erro ao buscar jogo");
+        }
+        const dadosJogo = await jogoResponse.json();
+        setJogo(dadosJogo);
+
+        // Buscar avaliações do jogo
+        const avaliacoesResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/avaliacoes/jogo/${jogoId}`);
+        if (avaliacoesResponse.ok) {
+          const dadosAvaliacoes = await avaliacoesResponse.json();
+          setAvaliacoes(dadosAvaliacoes);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+        toast.error("Erro de conexão com o servidor");
+      }
     }
-    buscaDados()
-  }, [])
+    loadData();
+  }, [jogoId]);
+
+  async function enviaAvaliacao(data: Inputs) {
+    if (!usuario?.id) {
+      toast.error("Faça login para enviar uma avaliação");
+      return;
+    }
+
+    if (!data.comentario.trim()) {
+      toast.error("O comentário é obrigatório");
+      return;
+    }
+
+    const jogoIdNum = Number(jogoId);
+    if (isNaN(jogoIdNum)) {
+      toast.error("ID do jogo inválido");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/avaliacoes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          usuarioId: usuario.id,
+          jogoId: jogoIdNum,
+          comentario: data.comentario,
+          nota: Number(data.nota),
+        }),
+      });
+
+      if (response.status === 201) {
+        toast.success("Avaliação enviada com sucesso!");
+        reset();
+        // Atualizar avaliações
+        const avaliacoesResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/avaliacoes/jogo/${jogoId}`);
+        if (avaliacoesResponse.ok) {
+          const dadosAvaliacoes = await avaliacoesResponse.json();
+          setAvaliacoes(dadosAvaliacoes);
+        }
+      } else {
+        const errorData = await response.json();
+        const errorMessage = errorData.erro?.issues
+          ? errorData.erro.issues.map((issue: { message: string }) => issue.message).join(", ")
+          : errorData.erro || "Erro ao enviar avaliação";
+        toast.error(errorMessage);
+      }
+    } catch (error) {
+      console.error("Erro na requisição:", error);
+      toast.error("Erro de conexão com o servidor");
+    }
+  }
+
+  if (!jogo) {
+    return <div className="text-white bg-black text-center">Carregando...</div>;
+  }
 
   return (
-    <>
-      <section className="flex mt-6 mx-auto flex-col items-center bg-zinc-900 border border-red-900 rounded-lg shadow-sm dark:bg-black dark:border-red-800 md:flex-row md:max-w-5xl hover:shadow-red-900/20 hover:shadow-lg transition-all duration-300">
-  {jogo?.foto && (
-    <div className="relative w-full md:w-1/2 h-96 md:h-auto">
-      <img
-        className="object-cover w-full h-full rounded-t-lg md:rounded-none md:rounded-s-lg"
-        src={jogo.foto}
-        alt={`Capa do jogo ${jogo.nome}`}
-      />
-      <span className="absolute bottom-2 right-2 bg-red-800 text-white text-xs font-semibold px-2.5 py-1 rounded shadow-md dark:bg-red-900 border border-white">
-        {jogo.genero.nome}
-      </span>
-    </div>
-  )}
+    <section className="min-h-screen bg-black py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-col md:flex-row items-center bg-zinc-900 border border-red-800 rounded-lg shadow-sm hover:shadow-red-900/20 transition-all duration-300">
+          {jogo.foto && (
+            <div className="relative w-full md:w-1/2 h-96 md:h-auto">
+              <img
+                className="object-cover w-full h-full rounded-t-lg md:rounded-none md:rounded-s-lg"
+                src={jogo.foto}
+                alt={`Capa do jogo ${jogo.nome}`}
+              />
+              <span className="absolute bottom-2 right-2 bg-red-800 text-white text-xs font-semibold px-2.5 py-1 rounded shadow-md border border-red-600">
+                {jogo.genero.nome}
+              </span>
+            </div>
+          )}
+          <div className="flex flex-col justify-between p-6 leading-normal w-full text-white space-y-3">
+            <h1 className="text-4xl sm:text-5xl font-extrabold text-center md:text-left mb-4 text-white">
+              {jogo.nome}
+            </h1>
+            <div className="text-sm text-zinc-300">
+              <span className="font-semibold text-red-400">Ano:</span> {jogo.ano}
+            </div>
+            <div className="text-sm text-zinc-300">
+              <span className="font-semibold text-red-400">Desenvolvedora:</span> {jogo.desenvolvedora}
+            </div>
+            <div className="text-sm text-zinc-300">
+              <span className="font-semibold text-red-400">Publicadora:</span> {jogo.publicadora}
+            </div>
+            <div className="text-sm text-zinc-300">
+              <span className="font-semibold text-red-400">Plataforma:</span> {jogo.plataforma}
+            </div>
+            <p className="mt-2 text-zinc-300 text-sm border-t pt-4 border-red-800/30">
+              <span className="text-red-400 font-medium">Descrição:</span> {jogo.descricao}
+            </p>
+          </div>
+        </div>
 
-  <div className="flex flex-col justify-between p-6 leading-normal w-full text-white space-y-3">
-  <h1 className="text-5xl font-extrabold text-center mb-6 text-white bg-clip-text underline dark:from-red-400 dark:to-red-700">
-  {jogo?.nome}
-</h1>
+        <div className="mt-6 bg-zinc-900 border border-red-800 rounded-lg shadow-sm p-6 sm:p-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-white mb-4">Avaliações</h2>
+          {usuario?.id ? (
+            <>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                🙂 Deixe sua avaliação para {jogo.nome}!
+              </h3>
+              <form onSubmit={handleSubmit(enviaAvaliacao)} className="space-y-4">
+                <input
+                  type="text"
+                  className="w-full p-2.5 text-sm text-gray-400 bg-zinc-800 border border-red-800 rounded-lg dark:placeholder-red-700"
+                  value={`${usuario.nome} (${usuario.email})`}
+                  disabled
+                  readOnly
+                />
+                <textarea
+                  id="comentario"
+                  className="w-full p-2.5 text-sm text-white bg-zinc-800 border border-red-800 rounded-lg focus:ring-red-500 focus:border-red-500 dark:placeholder-red-700"
+                  placeholder="Escreva seu comentário"
+                  required
+                  {...register("comentario")}
+                />
+                <div>
+                  <label htmlFor="nota" className="block mb-2 text-sm font-medium text-white">
+                    Nota (0-10)
+                  </label>
+                  <select
+                    id="nota"
+                    className="w-full p-2.5 text-sm text-white bg-zinc-800 border border-red-800 rounded-lg focus:ring-red-500 focus:border-red-500"
+                    required
+                    {...register("nota", { valueAsNumber: true })}
+                  >
+                    {[...Array(11)].map((_, i) => (
+                      <option key={i} value={i} className="bg-zinc-800">
+                        {i}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full text-white bg-red-800 hover:bg-red-600 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center"
+                >
+                  Enviar Avaliação
+                </button>
+              </form>
+            </>
+          ) : (
+            <p className="text-white text-sm">
+              😎 Gostou? <Link href="/login" className="text-blue-500 hover:underline">Faça login</Link> para deixar sua avaliação!
+            </p>
+          )}
+          {/* Lista de Avaliações */}
+          {avaliacoes.length > 0 ? (
+            <div className="mt-6 space-y-4">
+              {avaliacoes.map((avaliacao) => (
+                <div
+                  key={avaliacao.id}
+                  className="bg-zinc-800 border border-red-800 rounded-lg p-4"
+                >
+                  <p className="text-sm text-white">
+                    <span className="font-semibold">{avaliacao.usuario.nome}:</span> {avaliacao.comentario}
+                  </p>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Nota: {avaliacao.nota}/10 | Avaliado em:{" "}
+                    {new Date(avaliacao.createdAt).toLocaleDateString("pt-BR")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-zinc-400 text-sm mt-4">
+              Nenhuma avaliação para este jogo ainda.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-
-    <div className="text-sm text-zinc-300 dark:text-zinc-400">
-      <span className="font-semibold text-red-400 dark:text-red-500">Ano:</span> {jogo?.ano}
-    </div>
-
-    <div className="text-sm text-zinc-300 dark:text-zinc-400">
-      <span className="font-semibold text-red-400 dark:text-red-500">Desenvolvedora:</span> {jogo?.desenvolvedora}
-    </div>
-
-    <div className="text-sm text-zinc-300 dark:text-zinc-400">
-      <span className="font-semibold text-red-400 dark:text-red-500">Publicadora:</span> {jogo?.publicadora}
-    </div>
-
-   { <div className="text-sm text-zinc-300 dark:text-zinc-400">
-      <span className="font-semibold text-red-400 dark:text-red-500">Plataforma:</span> {jogo?.plataforma}
-    </div> }
-
-    <p className="mt-2 text-zinc-300 dark:text-zinc-400 text-sm border-t pt-4 border-red-900/30">
-      <span className="text-red-400 dark:text-red-500 font-medium">Descrição:</span> {jogo?.descricao}
-    </p>
-  </div>
-</section>
-    </>
-  )
+export default function Detalhes() {
+  return (
+    <Suspense fallback={<div className="text-white bg-black">Carregando...</div>}>
+      <DetalhesContent />
+    </Suspense>
+  );
 }

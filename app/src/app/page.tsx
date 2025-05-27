@@ -3,11 +3,11 @@ import { CardJogo } from "@/components/CardJogo";
 import { InputPesquisa } from "@/components/InputPesquisa";
 import { JogoItf } from "@/utils/types/JogoItf";
 import { useEffect, useState } from "react";
-
+import { useUsuarioStore } from "@/context/UsuarioContext";
 
 export default function Home() {
   const [jogos, setJogos] = useState<JogoItf[]>([])
-
+  const { logaUsuario } = useUsuarioStore()
 
   useEffect(() => {
     async function buscaDados() {
@@ -17,6 +17,16 @@ export default function Home() {
       setJogos(dados)
     }
     buscaDados()
+
+        async function buscaUsuario(id: string) {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/usuarios/${id}`)
+      const dados = await response.json()
+      logaUsuario(dados)
+    }
+    if (localStorage.getItem("usuarioKey")) {
+      const idUsuario = localStorage.getItem("usuarioKey")
+      buscaUsuario(idUsuario as string)
+    }
   }, [])
 
   const listaJogos = jogos.map(jogo => (
